@@ -4,12 +4,10 @@
  */
 package Chat;
 
-import static Chat.Chat_Server.dis;
-import static Chat.Chat_Server.dout;
-import static Chat.Chat_Server.s;
-import static Chat.Chat_Server.ss;
+import java.awt.EventQueue;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.Socket;
 
 /**
@@ -18,9 +16,7 @@ import java.net.Socket;
  */
 public class Chat_Client extends javax.swing.JFrame {
 
-    static Socket s;
-    static DataInputStream dis;
-    static DataOutputStream dout;
+    private static volatile DataOutputStream output;
     /**
      * Creates new form Chat_Client
      */
@@ -94,25 +90,26 @@ public class Chat_Client extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void msg_sendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_msg_sendActionPerformed
-        // TODO add your handling code here:
-        
+        DataOutputStream target = output;
+        if (target == null) {
+            msg_area.append("\nChưa kết nối với Server.");
+            return;
+        }
+        String message = msg_text.getText();
+        if (message.isBlank()) return;
         try {
-            String msg="";
-            msg=msg_text.getText();
-            dout.writeUTF(msg);
-            msg_text.setText("");              
+            target.writeUTF(message);
+            msg_area.append("\n Bạn: " + message);
+            msg_text.setText("");
+        } catch (IOException error) {
+            msg_area.append("\nGửi thất bại. Kiểm tra kết nối.");
         }
-        catch(Exception e){
-                
-        }
-        
-           
     }//GEN-LAST:event_msg_sendActionPerformed
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
+    public static void main(String args[]) throws Exception {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
@@ -137,29 +134,27 @@ public class Chat_Client extends javax.swing.JFrame {
         //</editor-fold>
 
         /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new Chat_Client().setVisible(true);
-            }
-        });
-        
-        
-        try { 
-            String msgin = "";
-            
-            s = new Socket("127.0.0.1",1201);
-            dis = new DataInputStream(s.getInputStream());
-            dout = new DataOutputStream(s.getOutputStream());
-
-            while (!msgin.equals("exit")) {
-                    msgin = dis.readUTF();
-                msg_area.setText(msg_area.getText() + "\n Server : " + msgin);
-            }
-
-        } catch (Exception e)
-        {
-            
+        EventQueue.invokeAndWait(() -> new Chat_Client().setVisible(true));
+        try (Socket peer = new Socket("127.0.0.1", 1201);
+                DataInputStream input = new DataInputStream(peer.getInputStream());
+                DataOutputStream stream = new DataOutputStream(peer.getOutputStream())) {
+            output = stream;
+            appendStatus("Đã kết nối với Server.");
+            String message;
+            do {
+                message = input.readUTF();
+                appendStatus("Server: " + message);
+            } while (!message.equals("exit"));
+            appendStatus("Cuộc trò chuyện đã kết thúc.");
+        } catch (IOException error) {
+            appendStatus("Kết nối đã ngắt hoặc Server chưa mở. Hãy chạy lại Client.");
+        } finally {
+            output = null;
         }
+    }
+
+    private static void appendStatus(String message) {
+        EventQueue.invokeLater(() -> msg_area.append("\n" + message));
     }
         
 
