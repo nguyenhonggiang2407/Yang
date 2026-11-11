@@ -4,10 +4,13 @@
  */
 package Chat;
 
-    import java.io.DataInputStream;
-    import java.io.DataOutputStream;
-    import java.net.ServerSocket;
-    import java.net.Socket;
+import java.awt.EventQueue;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
             
     
 /**
@@ -16,10 +19,7 @@ package Chat;
  */
 public class Chat_Server extends javax.swing.JFrame {
 
-    static ServerSocket ss;
-    static Socket s;
-    static DataInputStream dis;
-    static DataOutputStream dout;
+    private static volatile DataOutputStream output;
     /**
      * Creates new form Chat_Server
      */
@@ -93,24 +93,26 @@ public class Chat_Server extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void msg_sendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_msg_sendActionPerformed
-        // TODO add your handling code here:
-        
-        try {
-            String msg="";
-            msg=msg_text.getText();
-            dout.writeUTF(msg);
-            msg_text.setText("");              
+        DataOutputStream target = output;
+        if (target == null) {
+            msg_area.append("\nChưa kết nối với Client.");
+            return;
         }
-        catch(Exception e)
-        {
-            
+        String message = msg_text.getText();
+        if (message.isBlank()) return;
+        try {
+            target.writeUTF(message);
+            msg_area.append("\n Bạn: " + message);
+            msg_text.setText("");
+        } catch (IOException error) {
+            msg_area.append("\nGửi thất bại. Kiểm tra kết nối.");
         }
     }//GEN-LAST:event_msg_sendActionPerformed
 
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
+    public static void main(String args[]) throws Exception {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
@@ -135,28 +137,35 @@ public class Chat_Server extends javax.swing.JFrame {
         //</editor-fold>
 
         /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new Chat_Server().setVisible(true);
+        EventQueue.invokeAndWait(() -> new Chat_Server().setVisible(true));
+        try (ServerSocket server = openLoopbackSocket(1201)) {
+            appendStatus("Đang chờ Client ở 127.0.0.1:1201.");
+            try (Socket peer = server.accept();
+                    DataInputStream input = new DataInputStream(peer.getInputStream());
+                    DataOutputStream stream = new DataOutputStream(peer.getOutputStream())) {
+                output = stream;
+                appendStatus("Client đã kết nối.");
+                String message;
+                do {
+                    message = input.readUTF();
+                    appendStatus("Client: " + message);
+                } while (!message.equals("exit"));
+                appendStatus("Cuộc trò chuyện đã kết thúc.");
             }
-        });
-        
-        try { 
-            String msgin = "";
-            ss = new ServerSocket(1201);
-            s = ss.accept();
-            dis = new DataInputStream(s.getInputStream());
-            dout = new DataOutputStream(s.getOutputStream());
-
-            while (!msgin.equals("exit")) {
-                msgin = dis.readUTF();
-                msg_area.setText(msg_area.getText() + "\n Client : " + msgin);
-            }
-
-        } catch (Exception e)
-        {
-        }   
+        } catch (IOException error) {
+            appendStatus("Kết nối đã ngắt hoặc không mở được cổng 1201.");
+        } finally {
+            output = null;
         }
+    }
+
+    static ServerSocket openLoopbackSocket(int port) throws IOException {
+        return new ServerSocket(port, 1, InetAddress.getByName("127.0.0.1"));
+    }
+
+    private static void appendStatus(String message) {
+        EventQueue.invokeLater(() -> msg_area.append("\n" + message));
+    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel jLabel1;
